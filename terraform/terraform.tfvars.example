@@ -1,0 +1,19 @@
+# AWS Configuration
+aws_region  = "us-east-1"
+app_name    = "swasthya-sathi"
+environment = "production"
+
+# App Runner Configuration
+cpu    = "1024"  # 1 vCPU
+memory = "2048"  # 2 GB
+
+# JWT Secret (CHANGE THIS!)
+jwt_secret = "your-super-secret-jwt-key-change-this-in-production"
+
+# DynamoDB Table Names (update if different)
+dynamodb_users_table         = "SwasthyaSathi-Users"
+dynamodb_doctors_table       = "SwasthyaSathi-Doctors"
+dynamodb_consultations_table = "SwasthyaSathi-Consultations"
+dynamodb_notifications_table = "SwasthyaSathi-Notifications"
+dynamodb_medications_table   = "SwasthyaSathi-Medications"
+dynamodb_chat_drafts_table   = "SwasthyaSathi-ChatDrafts"

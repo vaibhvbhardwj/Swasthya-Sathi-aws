@@ -1,0 +1,76 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BedrockNovaProAccess",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
+      "Resource": "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-pro-v1:0"
+    },
+    {
+      "Sid": "BedrockNovaLiteAccess",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
+      "Resource": "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0"
+    },
+    {
+      "Sid": "DynamoDBFullAccess",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:PutItem",
+        "dynamodb:GetItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:DescribeTable"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:us-east-1:*:table/SwasthyaSathi-Users",
+        "arn:aws:dynamodb:us-east-1:*:table/SwasthyaSathi-Users/index/*",
+        "arn:aws:dynamodb:us-east-1:*:table/SwasthyaSathi-Doctors",
+        "arn:aws:dynamodb:us-east-1:*:table/SwasthyaSathi-Doctors/index/*",
+        "arn:aws:dynamodb:us-east-1:*:table/SwasthyaSathi-Consultations",
+        "arn:aws:dynamodb:us-east-1:*:table/SwasthyaSathi-Consultations/index/*",
+        "arn:aws:dynamodb:us-east-1:*:table/SwasthyaSathi-Notifications",
+        "arn:aws:dynamodb:us-east-1:*:table/SwasthyaSathi-Notifications/index/*",
+        "arn:aws:dynamodb:us-east-1:*:table/SwasthyaSathi-Medications",
+        "arn:aws:dynamodb:us-east-1:*:table/SwasthyaSathi-Medications/index/*",
+        "arn:aws:dynamodb:us-east-1:*:table/SwasthyaSathi-ChatDrafts",
+        "arn:aws:dynamodb:us-east-1:*:table/SwasthyaSathi-ChatDrafts/index/*"
+      ]
+    },
+    {
+      "Sid": "CloudWatchLogsAccess",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:*:log-group:/aws/swasthya-sathi/*"
+    },
+    {
+      "Sid": "S3BucketAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::swasthya-sathi-frontend-*",
+        "arn:aws:s3:::swasthya-sathi-frontend-*/*"
+      ]
+    }
+  ]
+}

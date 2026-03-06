@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Swasthya Sathi</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- DASHBOARD SCREEN -->
+    <div id="dashboard-screen">
+        <div class="dashboard-wrapper">
+            <!-- Sidebar -->
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-header">
+                    <div class="logo">
+                        <i class="fas fa-heartbeat"></i>
+                        <span class="logo-text">Swasthya Sathi</span>
+                    </div>
+                    <button class="sidebar-toggle" onclick="toggleSidebar()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                </div>
+                
+                <nav class="sidebar-nav">
+                    <button class="nav-item active" data-module="analytics">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Analytics</span>
+                    </button>
+                    <button class="nav-item" data-module="lab-analyzer">
+                        <i class="fas fa-microscope"></i>
+                        <span>Lab Analyzer</span>
+                    </button>
+                    <button class="nav-item" data-module="ai-chat">
+                        <i class="fas fa-comments"></i>
+                        <span>AI Chat</span>
+                    </button>
+                    <button class="nav-item" data-module="medications">
+                        <i class="fas fa-pills"></i>
+                        <span>Medications</span>
+                    </button>
+                    <button class="nav-item" data-module="consultations">
+                        <i class="fas fa-user-md"></i>
+                        <span>Consultations</span>
+                    </button>
+                    <button class="nav-item" data-module="notifications">
+                        <i class="fas fa-bell"></i>
+                        <span>Notifications</span>
+                        <span class="badge" id="notif-badge">0</span>
+                    </button>
+                    <button class="nav-item" data-module="profile">
+                        <i class="fas fa-user-circle"></i>
+                        <span>Profile</span>
+                    </button>
+                    <button class="nav-item" data-module="clinician">
+                        <i class="fas fa-user-md-chat"></i>
+                        <span>Clinician View</span>
+                        <span class="badge" id="pending-badge">0</span>
+                    </button>
+                </nav>
+                
+                <div class="sidebar-footer">
+                    <button class="nav-item" id="logout-btn">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="dashboard-main">
+                <header class="dashboard-header">
+                    <button class="mobile-sidebar-toggle" onclick="toggleSidebar()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <div class="header-left">
+                        <h1 id="page-title">Analytics Dashboard</h1>
+                    </div>
+                    <div class="header-right">
+                        <div class="user-info">
+                            <i class="fas fa-user-circle"></i>
+                            <span id="user-name">Loading...</span>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="dashboard-content">
+                    <!-- Analytics Module -->
+                    <div id="analytics-module" class="module active">
+                        <div class="analytics-grid">
+                            <div class="stat-card">
+                                <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                    <i class="fas fa-flask"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <h3 id="lab-reports-count">0</h3>
+                                    <p>Lab Reports Analyzed</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                                    <i class="fas fa-pills"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <h3 id="medications-count">0</h3>
+                                    <p>Active Medications</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                                    <i class="fas fa-calendar-check"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <h3 id="consultations-count">0</h3>
+                                    <p>Consultations Booked</p>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                                    <i class="fas fa-comments"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <h3 id="chats-count">0</h3>
+                                    <p>Health Questions Asked</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="quick-actions">
+                            <h2>Quick Actions</h2>
+                            <div class="actions-grid">
+                                <button class="action-card" onclick="showModule('lab-analyzer')">
+                                    <i class="fas fa-microscope"></i>
+                                    <span>Analyze Lab Report</span>
+                                </button>
+                                <button class="action-card" onclick="showModule('medications')">
+                                    <i class="fas fa-pills"></i>
+                                    <span>Add Medication</span>
+                                </button>
+                                <button class="action-card" onclick="showModule('consultations')">
+                                    <i class="fas fa-user-md"></i>
+                                    <span>Book Consultation</span>
+                                </button>
+                                <button class="action-card" onclick="showModule('ai-chat')">
+                                    <i class="fas fa-comments"></i>
+                                    <span>Ask Health Question</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lab Analyzer Module -->
+                    <div id="lab-analyzer-module" class="module">
+                        <h2>🔬 Lab Report Analyzer</h2>
+                        <p class="module-description">Paste your lab report to get AI-powered analysis</p>
+                        <textarea id="lab-report-input" placeholder="Paste your lab report here...&#10;&#10;Example:&#10;HbA1c: 6.5% (Normal: 4.0-5.6%)&#10;LDL: 150 mg/dL (Normal: <100 mg/dL)"></textarea>
+                        <button id="analyze-btn" class="btn-primary">
+                            <i class="fas fa-search"></i> Analyze Report
+                        </button>
+                        <div id="lab-result" class="result-container"></div>
+                        
+                        <!-- History Panel -->
+                        <div id="lab-history" class="lab-history-panel"></div>
+                    </div>
+
+                    <!-- AI Chat Module -->
+                    <div id="ai-chat-module" class="module">
+                        <h2>💬 AI Health Chat</h2>
+                        <p class="module-description">Ask health questions - responses reviewed by doctors</p>
+                        <div id="chat-messages" class="chat-container"></div>
+                        <div class="chat-input-container">
+                            <input type="text" id="chat-input" placeholder="Ask a health question...">
+                            <button id="send-chat-btn" class="btn-primary">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Medications Module -->
+                    <div id="medications-module" class="module">
+                        <div class="module-header">
+                            <h2>💊 Medication Tracker</h2>
+                            <button id="add-medication-btn" class="btn-primary">
+                                <i class="fas fa-plus"></i> Add Medication
+                            </button>
+                        </div>
+                        <div id="medications-list" class="list-container"></div>
+                        
+                        <div id="add-medication-form" class="form-modal" style="display: none;">
+                            <h3>Add New Medication</h3>
+                            <div class="form-group">
+                                <label>Medication Name</label>
+                                <input type="text" id="med-name" placeholder="e.g., Metformin" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Dosage</label>
+                                <input type="text" id="med-dosage" placeholder="e.g., 500mg" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Frequency</label>
+                                <select id="med-frequency" required>
+                                    <option value="">Select Frequency</option>
+                                    <option value="once_daily">Once Daily</option>
+                                    <option value="twice_daily">Twice Daily</option>
+                                    <option value="thrice_daily">Three Times Daily</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Notes (Optional)</label>
+                                <textarea id="med-notes" placeholder="Any additional notes..."></textarea>
+                            </div>
+                            <div class="form-actions">
+                                <button id="save-medication-btn" class="btn-primary">Save</button>
+                                <button id="cancel-medication-btn" class="btn-secondary">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Consultations Module -->
+                    <div id="consultations-module" class="module">
+                        <h2>👨‍⚕️ Doctor Consultations</h2>
+                        <p class="module-description">Book appointments with verified doctors</p>
+                        <div id="doctors-list" class="doctors-grid"></div>
+                    </div>
+
+                    <!-- Notifications Module -->
+                    <div id="notifications-module" class="module">
+                        <h2>🔔 Notifications</h2>
+                        <div id="notifications-list" class="list-container"></div>
+                    </div>
+
+                    <!-- Profile Module -->
+                    <div id="profile-module" class="module">
+                        <h2>👤 My Profile</h2>
+                        <form id="profile-form" class="profile-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Full Name</label>
+                                    <input type="text" id="profile-name" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Email</label>
+                                    <input type="email" id="profile-email" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Age</label>
+                                    <input type="number" id="profile-age" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Gender</label>
+                                    <select id="profile-gender" required>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Phone</label>
+                                    <input type="tel" id="profile-phone" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>New Password (Optional)</label>
+                                    <input type="password" id="profile-password" placeholder="Leave blank to keep current">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn-primary">
+                                <i class="fas fa-save"></i> Update Profile
+                            </button>
+                        </form>
+                        <div id="profile-message" class="message"></div>
+                    </div>
+
+                    <!-- Clinician View Module -->
+                    <div id="clinician-module" class="module">
+                        <h2>👨‍⚕️ Clinician Review Panel</h2>
+                        <p class="module-description">Review and approve AI-generated health responses</p>
+                        
+                        <div class="clinician-stats">
+                            <div class="stat-box">
+                                <i class="fas fa-clock"></i>
+                                <div>
+                                    <h3 id="pending-count">0</h3>
+                                    <p>Pending Reviews</p>
+                                </div>
+                            </div>
+                            <div class="stat-box">
+                                <i class="fas fa-check-circle"></i>
+                                <div>
+                                    <h3 id="approved-today">0</h3>
+                                    <p>Approved Today</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="pending-drafts-list" class="list-container"></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>
