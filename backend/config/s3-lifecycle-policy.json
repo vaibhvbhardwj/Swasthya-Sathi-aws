@@ -1,0 +1,14 @@
+{
+  "Rules": [
+    {
+      "ID": "DeleteTempFilesAfter1Day",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "temp-pdfs/"
+      },
+      "Expiration": {
+        "Days": 1
+      }
+    }
+  ]
+}

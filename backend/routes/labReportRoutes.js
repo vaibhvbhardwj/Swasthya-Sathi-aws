@@ -3,6 +3,8 @@ const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand, QueryCommand } = require('@aws-sdk/lib-dynamodb');
 const { parseLabReport, detectAbnormals, generateAIExplanation } = require('../services/labReportService');
 const { validateJWT } = require('../middleware/authMiddleware');
+const { upload, handleMulterError } = require('../middleware/uploadMiddleware');
+const { extractTextFromImage, extractTextFromPDF } = require('../services/ocrService');
 const { awsConfig } = require('../config/aws');
 const { v4: uuidv4 } = require('uuid');
 
@@ -98,6 +100,137 @@ router.post('/analyze', async (req, res) => {
     console.error('Lab report analysis error:', error);
     res.status(500).json({
       error: 'Analysis failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/lab-report/upload
+ * Upload and analyze lab report from image or PDF file
+ * Authentication is optional - saves history if authenticated
+ */
+router.post('/upload', upload.single('file'), handleMulterError, async (req, res) => {
+  try {
+    // Validate file was uploaded
+    if (!req.file) {
+      return res.status(400).json({ 
+        error: 'No file uploaded',
+        message: 'Please provide a file in the request'
+      });
+    }
+
+    // Try to get userId from token if provided
+    let userId = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.split(' ')[1];
+        const { verifyToken } = require('../services/authService');
+        const decoded = verifyToken(token);
+        userId = decoded.userId;
+      } catch (err) {
+        // Token invalid or expired, continue without userId
+        console.log('Invalid token, continuing without authentication');
+      }
+    }
+
+    const startTime = Date.now();
+
+    // Extract text using OCR based on file type
+    let extractedText;
+    try {
+      // Determine file type from both MIME type and file extension
+      const mimeType = req.file.mimetype.toLowerCase();
+      const fileName = req.file.originalname.toLowerCase();
+      
+      // Check if it's a PDF
+      if (mimeType === 'application/pdf' || fileName.endsWith('.pdf')) {
+        extractedText = await extractTextFromPDF(req.file.buffer);
+      }
+      // Handle all image formats
+      else {
+        // Determine image format from extension or mime type
+        let format = 'jpeg'; // default
+        if (fileName.endsWith('.png') || mimeType === 'image/png') {
+          format = 'png';
+        } else if (fileName.endsWith('.gif') || mimeType === 'image/gif') {
+          format = 'gif';
+        } else if (fileName.endsWith('.webp') || mimeType === 'image/webp') {
+          format = 'webp';
+        } else if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || mimeType.includes('jpeg')) {
+          format = 'jpeg';
+        }
+        
+        extractedText = await extractTextFromImage(req.file.buffer, format);
+      }
+    } catch (ocrError) {
+      return res.status(400).json({
+        error: 'Text extraction failed',
+        message: ocrError.message
+      });
+    }
+
+    // Parse lab report using existing function
+    const labReport = parseLabReport(extractedText);
+    
+    if (labReport.tests.length === 0) {
+      console.log('No lab values found. Extracted text:', extractedText);
+      return res.status(400).json({ 
+        error: 'No valid lab values found in the file',
+        message: 'Please ensure the file contains a readable lab report with recognized test names and values',
+        extractedText: extractedText.substring(0, 500), // Show first 500 chars for debugging
+        hint: 'Supported tests: HbA1c, Glucose, Cholesterol, LDL, HDL, Triglycerides, WBC, RBC, Hemoglobin, Creatinine, Sodium, Potassium, and more'
+      });
+    }
+
+    // Detect abnormals
+    const abnormals = detectAbnormals(labReport);
+
+    // Generate AI explanation
+    const aiExplanation = await generateAIExplanation(labReport, abnormals);
+
+    const elapsed = Date.now() - startTime;
+
+    // Save to history only if authenticated
+    let reportId = null;
+    if (userId) {
+      reportId = uuidv4();
+      const timestamp = new Date().toISOString();
+      
+      try {
+        await docClient.send(new PutCommand({
+          TableName: 'LabReports',
+          Item: {
+            reportId,
+            userId,
+            reportText: extractedText,
+            parsedValues: labReport.tests,
+            abnormals,
+            aiExplanation,
+            analyzedAt: timestamp,
+            createdAt: timestamp
+          }
+        }));
+      } catch (dbError) {
+        console.error('Failed to save lab report history:', dbError);
+        // Continue even if history save fails
+      }
+    }
+
+    // Return same format as /analyze endpoint
+    res.json({
+      reportId,
+      parsedValues: labReport.tests,
+      abnormals,
+      aiExplanation,
+      disclaimer: SAFETY_DISCLAIMER,
+      processingTime: `${elapsed}ms`
+    });
+  } catch (error) {
+    console.error('Lab report upload error:', error);
+    res.status(500).json({
+      error: 'Upload processing failed',
       message: error.message
     });
   }

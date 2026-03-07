@@ -153,11 +153,60 @@
                     <!-- Lab Analyzer Module -->
                     <div id="lab-analyzer-module" class="module">
                         <h2>🔬 Lab Report Analyzer</h2>
-                        <p class="module-description">Paste your lab report to get AI-powered analysis</p>
-                        <textarea id="lab-report-input" placeholder="Paste your lab report here...&#10;&#10;Example:&#10;HbA1c: 6.5% (Normal: 4.0-5.6%)&#10;LDL: 150 mg/dL (Normal: <100 mg/dL)"></textarea>
-                        <button id="analyze-btn" class="btn-primary">
-                            <i class="fas fa-search"></i> Analyze Report
-                        </button>
+                        <p class="module-description">Upload a lab report image/PDF or paste text to get AI-powered analysis</p>
+                        
+                        <!-- Input Method Toggle -->
+                        <div class="input-method-toggle">
+                            <button class="toggle-btn active" data-method="text" onclick="switchInputMethod('text')">
+                                <i class="fas fa-keyboard"></i> Manual Text Entry
+                            </button>
+                            <button class="toggle-btn" data-method="file" onclick="switchInputMethod('file')">
+                                <i class="fas fa-file-upload"></i> Upload File
+                            </button>
+                        </div>
+                        
+                        <!-- Text Input Section -->
+                        <div id="text-input-section" class="input-section active">
+                            <textarea id="lab-report-input" placeholder="Paste your lab report here...&#10;&#10;Example:&#10;HbA1c: 6.5% (Normal: 4.0-5.6%)&#10;LDL: 150 mg/dL (Normal: <100 mg/dL)"></textarea>
+                            <button id="analyze-btn" class="btn-primary">
+                                <i class="fas fa-search"></i> Analyze Report
+                            </button>
+                        </div>
+                        
+                        <!-- File Upload Section -->
+                        <div id="file-upload-section" class="input-section">
+                            <div class="file-upload-container">
+                                <input type="file" id="lab-file-input" accept="image/*,application/pdf,.jpg,.jpeg,.png,.gif,.webp,.pdf" style="display: none;">
+                                <div class="file-upload-area" id="file-upload-area" onclick="document.getElementById('lab-file-input').click()">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                    <h3>Click to Upload Lab Report</h3>
+                                    <p>or drag and drop file here</p>
+                                    <div class="file-info">
+                                        <p><strong>Supported formats:</strong> All images (JPEG, PNG, GIF, WebP, etc.) and PDF</p>
+                                        <p><strong>Maximum size:</strong> 10MB</p>
+                                    </div>
+                                </div>
+                                <div id="file-selected-info" class="file-selected-info" style="display: none;">
+                                    <i class="fas fa-file-alt"></i>
+                                    <span id="selected-file-name"></span>
+                                    <button class="btn-remove-file" onclick="removeSelectedFile()">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <button id="upload-analyze-btn" class="btn-primary" style="display: none;">
+                                    <i class="fas fa-search"></i> Analyze Uploaded Report
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Progress Indicator -->
+                        <div id="upload-progress" class="upload-progress" style="display: none;">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progress-fill"></div>
+                            </div>
+                            <p id="progress-text">Uploading...</p>
+                        </div>
+                        
                         <div id="lab-result" class="result-container"></div>
                         
                         <!-- History Panel -->

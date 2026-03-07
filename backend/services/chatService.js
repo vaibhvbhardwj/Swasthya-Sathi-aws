@@ -79,6 +79,8 @@ async function getDraftResponse(draftId, userId) {
       status: 'approved',
       question: draft.question,
       response: draft.aiResponse,
+      editedResponse: draft.editedResponse || null,
+      clinicianNotes: draft.clinicianNotes || null,
       reviewedAt: draft.reviewedAt,
       reviewedBy: draft.reviewedBy
     };
@@ -100,7 +102,7 @@ async function getDraftResponse(draftId, userId) {
 /**
  * Review and approve/reject draft (clinician only)
  */
-async function reviewDraft(draftId, clinicianId, action) {
+async function reviewDraft(draftId, clinicianId, action, editedResponse = null, clinicianNotes = null) {
   if (action !== 'approve' && action !== 'reject') {
     throw new Error('Action must be "approve" or "reject"');
   }
@@ -119,19 +121,33 @@ async function reviewDraft(draftId, clinicianId, action) {
   const draft = response.Item;
 
   if (action === 'approve') {
-    // Update status to approved
+    // Prepare update expression
+    let updateExpression = 'SET #status = :status, reviewedBy = :reviewedBy, reviewedAt = :reviewedAt';
+    const expressionAttributeNames = { '#status': 'status' };
+    const expressionAttributeValues = {
+      ':status': 'approved',
+      ':reviewedBy': clinicianId,
+      ':reviewedAt': new Date().toISOString()
+    };
+
+    // Add edited response if provided
+    if (editedResponse) {
+      updateExpression += ', editedResponse = :editedResponse';
+      expressionAttributeValues[':editedResponse'] = editedResponse;
+    }
+
+    // Add clinician notes if provided
+    if (clinicianNotes) {
+      updateExpression += ', clinicianNotes = :clinicianNotes';
+      expressionAttributeValues[':clinicianNotes'] = clinicianNotes;
+    }
+
     const updateCommand = new UpdateCommand({
       TableName: CHAT_DRAFTS_TABLE,
       Key: { draftId },
-      UpdateExpression: 'SET #status = :status, reviewedBy = :reviewedBy, reviewedAt = :reviewedAt',
-      ExpressionAttributeNames: {
-        '#status': 'status'
-      },
-      ExpressionAttributeValues: {
-        ':status': 'approved',
-        ':reviewedBy': clinicianId,
-        ':reviewedAt': new Date().toISOString()
-      }
+      UpdateExpression: updateExpression,
+      ExpressionAttributeNames: expressionAttributeNames,
+      ExpressionAttributeValues: expressionAttributeValues
     });
 
     await docClient.send(updateCommand);

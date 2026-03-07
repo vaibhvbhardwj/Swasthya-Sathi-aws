@@ -6,6 +6,7 @@ const API_BASE_URL = window.location.hostname === 'localhost'
 // State
 let authToken = null;
 let currentUser = null;
+let selectedFile = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -41,8 +42,36 @@ function setupEventListeners() {
     // Logout
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
     
-    // Lab analyzer
+    // Lab analyzer - text input
     document.getElementById('analyze-btn').addEventListener('click', handleLabAnalysis);
+    
+    // Lab analyzer - file upload
+    const fileInput = document.getElementById('lab-file-input');
+    const uploadArea = document.getElementById('file-upload-area');
+    const uploadBtn = document.getElementById('upload-analyze-btn');
+    
+    fileInput.addEventListener('change', handleFileSelection);
+    uploadBtn.addEventListener('click', handleFileUpload);
+    
+    // Drag and drop support
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('drag-over');
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('drag-over');
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('drag-over');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            handleFileSelection({ target: fileInput });
+        }
+    });
     
     // Chat
     document.getElementById('send-chat-btn').addEventListener('click', handleSendChat);
@@ -115,6 +144,204 @@ function handleLogout() {
     window.location.href = 'index.html';
 }
 
+// File Upload Functions
+function switchInputMethod(method) {
+    // Update toggle buttons
+    document.querySelectorAll('.toggle-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.querySelector(`[data-method="${method}"]`).classList.add('active');
+    
+    // Update input sections
+    document.querySelectorAll('.input-section').forEach(section => {
+        section.classList.remove('active');
+    });
+    
+    if (method === 'text') {
+        document.getElementById('text-input-section').classList.add('active');
+    } else {
+        document.getElementById('file-upload-section').classList.add('active');
+    }
+    
+    // Clear any previous results or errors
+    document.getElementById('lab-result').innerHTML = '';
+}
+
+function handleFileSelection(event) {
+    const file = event.target.files[0];
+    
+    if (!file) {
+        return;
+    }
+    
+    // Validate file format - accept all images and PDFs
+    const fileName = file.name.toLowerCase();
+    const isPDF = file.type === 'application/pdf' || fileName.endsWith('.pdf');
+    const isImage = file.type.startsWith('image/') || 
+                    fileName.endsWith('.jpg') || 
+                    fileName.endsWith('.jpeg') || 
+                    fileName.endsWith('.png') || 
+                    fileName.endsWith('.gif') || 
+                    fileName.endsWith('.webp');
+    
+    if (!isPDF && !isImage) {
+        alert('Invalid file format. Please upload an image or PDF file.');
+        event.target.value = '';
+        return;
+    }
+    
+    // Validate file size (10MB max)
+    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+    if (file.size > maxSize) {
+        alert('File size exceeds 10MB limit. Please upload a smaller file.');
+        event.target.value = '';
+        return;
+    }
+    
+    // Store selected file
+    selectedFile = file;
+    
+    // Show file info
+    document.getElementById('file-upload-area').style.display = 'none';
+    document.getElementById('file-selected-info').style.display = 'flex';
+    document.getElementById('selected-file-name').textContent = file.name;
+    document.getElementById('upload-analyze-btn').style.display = 'block';
+}
+
+function removeSelectedFile() {
+    selectedFile = null;
+    document.getElementById('lab-file-input').value = '';
+    document.getElementById('file-upload-area').style.display = 'block';
+    document.getElementById('file-selected-info').style.display = 'none';
+    document.getElementById('upload-analyze-btn').style.display = 'none';
+}
+
+async function handleFileUpload() {
+    if (!selectedFile) {
+        alert('Please select a file first');
+        return;
+    }
+    
+    const progressContainer = document.getElementById('upload-progress');
+    const progressFill = document.getElementById('progress-fill');
+    const progressText = document.getElementById('progress-text');
+    const resultContainer = document.getElementById('lab-result');
+    
+    // Show progress indicator
+    progressContainer.style.display = 'block';
+    progressFill.style.width = '0%';
+    progressText.textContent = 'Uploading file...';
+    resultContainer.innerHTML = '';
+    
+    try {
+        // Create FormData
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        
+        // Simulate upload progress
+        progressFill.style.width = '30%';
+        
+        const response = await fetch(`${API_BASE_URL}/lab-report/upload`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: formData
+        });
+        
+        progressFill.style.width = '60%';
+        progressText.textContent = 'Extracting text from file...';
+        
+        const data = await response.json();
+        
+        progressFill.style.width = '90%';
+        progressText.textContent = 'Analyzing lab report...';
+        
+        // Small delay to show progress
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        progressFill.style.width = '100%';
+        progressText.textContent = 'Complete!';
+        
+        if (response.ok) {
+            // Save to localStorage
+            const labReports = JSON.parse(localStorage.getItem('labReports') || '[]');
+            labReports.unshift({
+                id: data.reportId || Date.now(),
+                reportText: data.extractedText || 'Uploaded from file',
+                parsedValues: data.parsedValues,
+                abnormals: data.abnormals,
+                aiExplanation: data.aiExplanation,
+                analyzedAt: new Date().toISOString(),
+                uploadedFile: selectedFile.name
+            });
+            // Keep only last 20 reports
+            if (labReports.length > 20) labReports.pop();
+            localStorage.setItem('labReports', JSON.stringify(labReports));
+            
+            // Hide progress after a moment
+            setTimeout(() => {
+                progressContainer.style.display = 'none';
+            }, 1000);
+            
+            displayLabResults(data);
+            loadLabHistory();
+            loadAnalytics();
+            
+            // Reset file selection
+            removeSelectedFile();
+        } else {
+            progressContainer.style.display = 'none';
+            
+            // Handle specific error cases
+            if (data.error && data.error.includes('text')) {
+                resultContainer.innerHTML = `
+                    <div class="error-message">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Unable to Extract Text</h3>
+                        <p>${data.message || data.error}</p>
+                        ${data.extractedText ? `
+                            <details style="margin: 15px 0; padding: 10px; background: #f5f5f5; border-radius: 5px;">
+                                <summary style="cursor: pointer; font-weight: bold;">View Extracted Text</summary>
+                                <pre style="margin-top: 10px; white-space: pre-wrap; font-size: 12px;">${data.extractedText}</pre>
+                            </details>
+                        ` : ''}
+                        ${data.hint ? `<p style="color: #666; font-size: 14px;"><strong>Hint:</strong> ${data.hint}</p>` : ''}
+                        <p><strong>Suggestions:</strong></p>
+                        <ul>
+                            <li>Ensure the image is clear and well-lit</li>
+                            <li>Try uploading a different file</li>
+                            <li>Use the manual text entry option instead</li>
+                        </ul>
+                        <button class="btn-primary" onclick="switchInputMethod('text')">
+                            <i class="fas fa-keyboard"></i> Switch to Manual Entry
+                        </button>
+                    </div>
+                `;
+            } else {
+                resultContainer.innerHTML = `
+                    <p class="error">Error: ${data.error}</p>
+                    <button class="btn-primary" onclick="handleFileUpload()">
+                        <i class="fas fa-redo"></i> Retry Upload
+                    </button>
+                `;
+            }
+        }
+    } catch (error) {
+        progressContainer.style.display = 'none';
+        resultContainer.innerHTML = `
+            <div class="error-message">
+                <i class="fas fa-exclamation-circle"></i>
+                <h3>Upload Failed</h3>
+                <p>Error: ${error.message}</p>
+                <button class="btn-primary" onclick="handleFileUpload()">
+                    <i class="fas fa-redo"></i> Retry Upload
+                </button>
+            </div>
+        `;
+    }
+}
+
 // User Functions
 async function loadUserName() {
     try {
@@ -150,6 +377,15 @@ async function loadAnalytics() {
         if (labReports && labReports.ok) {
             const data = await labReports.json();
             labCount = data.count || 0;
+            
+            // NEW: If backend returns 0, check localStorage for actual count
+            if (labCount === 0) {
+                const localLabs = JSON.parse(localStorage.getItem('labReports') || '[]');
+                if (localLabs.length > 0) {
+                    labCount = localLabs.length;
+                    console.log('Using localStorage count (backend returned 0):', labCount);
+                }
+            }
             console.log('Lab reports from backend:', labCount);
         } else {
             // Fallback to localStorage
@@ -349,8 +585,22 @@ function displayLabResults(data) {
                     ${data.disclaimer}
                 </div>
             </div>
+            
+            <div class="chat-integration-section">
+                <button class="btn-chat-integration" onclick="navigateToChat()">
+                    <i class="fas fa-comments"></i> Ask AI About These Results
+                </button>
+                <p class="chat-integration-hint">Have questions about your lab results? Chat with our AI assistant for personalized guidance.</p>
+            </div>
         </div>
     `;
+    
+    // Store analysis context for chat integration
+    window.labAnalysisContext = {
+        parsedValues: data.parsedValues,
+        abnormals: data.abnormals,
+        aiExplanation: data.aiExplanation
+    };
     
     document.getElementById('lab-result').innerHTML = html;
 }
@@ -428,6 +678,47 @@ async function handleSendChat() {
     
     const messagesContainer = document.getElementById('chat-messages');
     
+    // Check for lab report context
+    let contextualQuestion = question;
+    const labContext = sessionStorage.getItem('labAnalysisContext');
+    
+    if (labContext) {
+        try {
+            const context = JSON.parse(labContext);
+            
+            // Format lab report summary for context
+            const abnormalsList = context.abnormals.length > 0 
+                ? context.abnormals.join(', ') 
+                : 'None';
+            
+            const testsList = context.parsedValues
+                .map(test => `${test.name}: ${test.value} ${test.unit}`)
+                .join(', ');
+            
+            // Prepend context to the question
+            contextualQuestion = `[Lab Report Context]\n` +
+                `Recent lab analysis shows:\n` +
+                `- Tests analyzed: ${context.parsedValues.length}\n` +
+                `- Abnormal values: ${abnormalsList}\n` +
+                `- Test results: ${testsList}\n` +
+                `- AI Analysis: ${context.aiExplanation.substring(0, 200)}...\n\n` +
+                `User Question: ${question}`;
+            
+            // Clear the context after first use
+            sessionStorage.removeItem('labAnalysisContext');
+            window.labAnalysisContext = null;
+            
+            // Show context indicator to user
+            messagesContainer.innerHTML += `
+                <div class="chat-context-indicator">
+                    <i class="fas fa-flask"></i> Including your recent lab report analysis in this question
+                </div>
+            `;
+        } catch (error) {
+            console.error('Error parsing lab context:', error);
+        }
+    }
+    
     // Show user's question
     messagesContainer.innerHTML += `<div class="chat-message user">${question}</div>`;
     input.value = '';
@@ -443,7 +734,7 @@ async function handleSendChat() {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${authToken}`
             },
-            body: JSON.stringify({ question })
+            body: JSON.stringify({ question: contextualQuestion })
         });
         
         const data = await response.json();
@@ -499,13 +790,32 @@ async function pollForApproval(draftId) {
             const data = await response.json();
             
             if (data.status === 'approved') {
-                // Update the message with approved response
+                // Update the message with approved response (edited or original)
                 const messageEl = document.querySelector(`[data-draft-id="${draftId}"]`);
                 if (messageEl) {
-                    messageEl.innerHTML = `
-                        ${formatMarkdownText(data.response)}
+                    // Use edited response if available, otherwise use original
+                    const responseText = data.editedResponse || data.response;
+                    
+                    let responseHTML = `${formatMarkdownText(responseText)}`;
+                    
+                    // Add clinician notes if available
+                    if (data.clinicianNotes) {
+                        responseHTML += `
+                            <div class="clinician-notes-display">
+                                <div class="notes-badge">
+                                    <i class="fas fa-user-md"></i> Clinician's Note
+                                </div>
+                                <div class="notes-content">
+                                    ${formatMarkdownText(data.clinicianNotes)}
+                                </div>
+                            </div>`;
+                    }
+                    
+                    responseHTML += `
                         <div class="review-status approved">✅ Clinician Approved</div>
                     `;
+                    
+                    messageEl.innerHTML = responseHTML;
                 }
                 return true; // Stop polling
             } else if (data.status === 'rejected') {
@@ -541,6 +851,17 @@ async function pollForApproval(draftId) {
     }, 5000);
 }
 
+// Navigate to chat with lab report context
+function navigateToChat() {
+    // Store lab analysis context in sessionStorage for persistence
+    if (window.labAnalysisContext) {
+        sessionStorage.setItem('labAnalysisContext', JSON.stringify(window.labAnalysisContext));
+    }
+    
+    // Switch to AI chat module
+    showModule('ai-chat');
+}
+
 // Load chat history when opening chat module
 async function loadChatHistory() {
     try {
@@ -554,17 +875,37 @@ async function loadChatHistory() {
             const messagesContainer = document.getElementById('chat-messages');
             messagesContainer.innerHTML = '';
             
-            data.chats.reverse().forEach(chat => {
+            data.chats.forEach(chat => {
                 // Show question
                 messagesContainer.innerHTML += `<div class="chat-message user">${chat.question}</div>`;
                 
                 // Show response based on status
                 if (chat.status === 'approved') {
-                    messagesContainer.innerHTML += `
+                    // Use edited response if available, otherwise use original
+                    const responseText = chat.editedResponse || chat.aiResponse;
+                    
+                    let responseHTML = `
                         <div class="chat-message ai">
-                            ${formatMarkdownText(chat.aiResponse)}
+                            ${formatMarkdownText(responseText)}`;
+                    
+                    // Show clinician notes if available
+                    if (chat.clinicianNotes) {
+                        responseHTML += `
+                            <div class="clinician-notes-display">
+                                <div class="notes-badge">
+                                    <i class="fas fa-user-md"></i> Clinician's Note
+                                </div>
+                                <div class="notes-content">
+                                    ${formatMarkdownText(chat.clinicianNotes)}
+                                </div>
+                            </div>`;
+                    }
+                    
+                    responseHTML += `
                             <div class="review-status approved">✅ Clinician Approved</div>
                         </div>`;
+                    
+                    messagesContainer.innerHTML += responseHTML;
                 } else if (chat.status === 'pending_review') {
                     messagesContainer.innerHTML += `
                         <div class="chat-message ai" data-draft-id="${chat.draftId}">
@@ -970,7 +1311,7 @@ function displayPendingDrafts(drafts) {
     }
     
     container.innerHTML = drafts.map(draft => `
-        <div class="draft-card">
+        <div class="draft-card" id="draft-${draft.draftId}">
             <div class="draft-header">
                 <span class="draft-time">${new Date(draft.createdAt).toLocaleString()}</span>
                 <span class="draft-model">${draft.model}</span>
@@ -979,11 +1320,34 @@ function displayPendingDrafts(drafts) {
                 <strong>Patient Question:</strong>
                 <p>${draft.question}</p>
             </div>
-            <div class="draft-response">
+            <div class="draft-response" id="response-${draft.draftId}">
                 <strong>AI Response:</strong>
-                <p>${formatMarkdownText(draft.aiResponse)}</p>
+                <div class="response-content" id="response-content-${draft.draftId}">
+                    <p>${formatMarkdownText(draft.aiResponse)}</p>
+                </div>
+                <div class="response-edit" id="response-edit-${draft.draftId}" style="display: none;">
+                    <textarea class="edit-textarea" id="edit-textarea-${draft.draftId}">${draft.aiResponse}</textarea>
+                </div>
+            </div>
+            <div class="clinician-notes" id="notes-section-${draft.draftId}">
+                <strong>Clinician's Additional Notes:</strong>
+                <div class="notes-display" id="notes-display-${draft.draftId}" style="display: none;">
+                    <div class="notes-content"></div>
+                </div>
+                <div class="notes-input">
+                    <textarea class="notes-textarea" id="notes-textarea-${draft.draftId}" placeholder="Add your professional notes or clarifications here (optional)..."></textarea>
+                </div>
             </div>
             <div class="draft-actions">
+                <button class="btn-edit" id="edit-btn-${draft.draftId}" onclick="toggleEditMode('${draft.draftId}')">
+                    <i class="fas fa-edit"></i> Edit Response
+                </button>
+                <button class="btn-save-edit" id="save-edit-btn-${draft.draftId}" style="display: none;" onclick="saveEdit('${draft.draftId}')">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+                <button class="btn-cancel-edit" id="cancel-edit-btn-${draft.draftId}" style="display: none;" onclick="cancelEdit('${draft.draftId}')">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
                 <button class="btn-approve" onclick="reviewDraft('${draft.draftId}', 'approve')">
                     <i class="fas fa-check"></i> Approve
                 </button>
@@ -996,6 +1360,14 @@ function displayPendingDrafts(drafts) {
 }
 
 async function reviewDraft(draftId, action) {
+    // Get edited response and clinician notes
+    const editedResponse = document.getElementById(`edit-textarea-${draftId}`)?.value;
+    const clinicianNotes = document.getElementById(`notes-textarea-${draftId}`)?.value.trim();
+    
+    // Check if response was edited
+    const responseContent = document.getElementById(`response-content-${draftId}`);
+    const isEdited = responseContent && responseContent.dataset.edited === 'true';
+    
     try {
         const response = await fetch(`${API_BASE_URL}/chat/review`, {
             method: 'POST',
@@ -1003,7 +1375,12 @@ async function reviewDraft(draftId, action) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${authToken}`
             },
-            body: JSON.stringify({ draftId, action })
+            body: JSON.stringify({ 
+                draftId, 
+                action,
+                editedResponse: isEdited ? editedResponse : undefined,
+                clinicianNotes: clinicianNotes || undefined
+            })
         });
         
         const data = await response.json();
@@ -1016,6 +1393,12 @@ async function reviewDraft(draftId, action) {
             if (chatIndex !== -1) {
                 chatHistory[chatIndex].status = action === 'approve' ? 'approved' : 'rejected';
                 chatHistory[chatIndex].reviewedAt = new Date().toISOString();
+                if (isEdited) {
+                    chatHistory[chatIndex].editedResponse = editedResponse;
+                }
+                if (clinicianNotes) {
+                    chatHistory[chatIndex].clinicianNotes = clinicianNotes;
+                }
                 localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
             }
             
@@ -1034,6 +1417,12 @@ async function reviewDraft(draftId, action) {
         if (chatIndex !== -1) {
             chatHistory[chatIndex].status = action === 'approve' ? 'approved' : 'rejected';
             chatHistory[chatIndex].reviewedAt = new Date().toISOString();
+            if (isEdited) {
+                chatHistory[chatIndex].editedResponse = editedResponse;
+            }
+            if (clinicianNotes) {
+                chatHistory[chatIndex].clinicianNotes = clinicianNotes;
+            }
             localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
             
             alert(`Draft ${action === 'approve' ? 'approved' : 'rejected'} successfully!`);
@@ -1042,4 +1431,79 @@ async function reviewDraft(draftId, action) {
             alert('Error: ' + error.message);
         }
     }
+}
+
+// Toggle edit mode for AI response
+function toggleEditMode(draftId) {
+    const responseContent = document.getElementById(`response-content-${draftId}`);
+    const responseEdit = document.getElementById(`response-edit-${draftId}`);
+    const editBtn = document.getElementById(`edit-btn-${draftId}`);
+    const saveBtn = document.getElementById(`save-edit-btn-${draftId}`);
+    const cancelBtn = document.getElementById(`cancel-edit-btn-${draftId}`);
+    
+    // Hide view, show edit
+    responseContent.style.display = 'none';
+    responseEdit.style.display = 'block';
+    
+    // Toggle buttons
+    editBtn.style.display = 'none';
+    saveBtn.style.display = 'inline-block';
+    cancelBtn.style.display = 'inline-block';
+}
+
+// Save edited response
+function saveEdit(draftId) {
+    const responseContent = document.getElementById(`response-content-${draftId}`);
+    const responseEdit = document.getElementById(`response-edit-${draftId}`);
+    const editTextarea = document.getElementById(`edit-textarea-${draftId}`);
+    const editBtn = document.getElementById(`edit-btn-${draftId}`);
+    const saveBtn = document.getElementById(`save-edit-btn-${draftId}`);
+    const cancelBtn = document.getElementById(`cancel-edit-btn-${draftId}`);
+    
+    // Update the display with edited content
+    const editedText = editTextarea.value;
+    responseContent.innerHTML = `<p>${formatMarkdownText(editedText)}</p>`;
+    responseContent.dataset.edited = 'true';
+    
+    // Show view, hide edit
+    responseContent.style.display = 'block';
+    responseEdit.style.display = 'none';
+    
+    // Toggle buttons
+    editBtn.style.display = 'inline-block';
+    editBtn.innerHTML = '<i class="fas fa-edit"></i> Edit Again';
+    saveBtn.style.display = 'none';
+    cancelBtn.style.display = 'none';
+    
+    // Show success indicator
+    const indicator = document.createElement('span');
+    indicator.className = 'edit-indicator';
+    indicator.innerHTML = '<i class="fas fa-check-circle"></i> Edited by clinician';
+    indicator.style.color = '#28a745';
+    indicator.style.marginLeft = '10px';
+    indicator.style.fontSize = '0.9em';
+    
+    const existingIndicator = responseContent.parentElement.querySelector('.edit-indicator');
+    if (existingIndicator) {
+        existingIndicator.remove();
+    }
+    responseContent.parentElement.insertBefore(indicator, responseContent);
+}
+
+// Cancel edit mode
+function cancelEdit(draftId) {
+    const responseContent = document.getElementById(`response-content-${draftId}`);
+    const responseEdit = document.getElementById(`response-edit-${draftId}`);
+    const editBtn = document.getElementById(`edit-btn-${draftId}`);
+    const saveBtn = document.getElementById(`save-edit-btn-${draftId}`);
+    const cancelBtn = document.getElementById(`cancel-edit-btn-${draftId}`);
+    
+    // Show view, hide edit
+    responseContent.style.display = 'block';
+    responseEdit.style.display = 'none';
+    
+    // Toggle buttons
+    editBtn.style.display = 'inline-block';
+    saveBtn.style.display = 'none';
+    cancelBtn.style.display = 'none';
 }

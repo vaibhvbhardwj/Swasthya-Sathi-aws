@@ -32,8 +32,13 @@ const dynamoDBConfig = {
   }
 };
 
+const textractConfig = {
+  timeout: 30000 // 30 seconds for OCR processing
+};
+
 module.exports = {
   awsConfig,
   bedrockConfig,
-  dynamoDBConfig
+  dynamoDBConfig,
+  textractConfig
 };

@@ -57,13 +57,13 @@ router.get('/response/:draftId', validateJWT, async (req, res) => {
  */
 router.post('/review', validateJWT, async (req, res) => {
   try {
-    const { draftId, action } = req.body;
+    const { draftId, action, editedResponse, clinicianNotes } = req.body;
 
     if (!draftId || !action) {
       return res.status(400).json({ error: 'draftId and action are required' });
     }
 
-    const result = await reviewDraft(draftId, req.userId, action);
+    const result = await reviewDraft(draftId, req.userId, action, editedResponse, clinicianNotes);
 
     res.json(result);
   } catch (error) {
