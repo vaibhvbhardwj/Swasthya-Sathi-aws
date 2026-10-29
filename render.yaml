@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: swasth-sathi
+    runtime: node
+    buildCommand: npm --prefix backend install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: OLLAMA_MODEL
+        value: llama3
+      - key: OLLAMA_BASE_URL
+        sync: false
+      - key: LOCAL_DB_PATH
+        sync: false

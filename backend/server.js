@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
-const { awsConfig, bedrockConfig, dynamoDBConfig } = require('./config/aws');
+const { DATA_FILE } = require('./services/localStore');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,10 +26,12 @@ app.get('/health', (req, res) => {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     service: 'Swasthya Sathi Backend',
-    region: awsConfig.region,
-    models: {
-      primary: bedrockConfig.modelIdSonnet,
-      fallback: bedrockConfig.modelIdHaiku
+    storage: 'local-json',
+    dataFile: DATA_FILE,
+    ai: {
+      provider: 'ollama',
+      model: process.env.OLLAMA_MODEL || 'llama3',
+      baseUrl: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434'
     }
   });
 });
@@ -98,11 +100,10 @@ app.use((req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Swasthya Sathi Backend running on port ${PORT}`);
-  console.log(`📍 Health check: http://localhost:${PORT}/health`);
-  console.log(`🌍 Region: ${awsConfig.region}`);
-  console.log(`🤖 AI Model: ${bedrockConfig.modelIdSonnet}`);
-  console.log(`📊 DynamoDB Tables:`, Object.keys(dynamoDBConfig.tables).length);
+  console.log(`Swasthya Sathi Backend running on port ${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`Storage: local JSON (${DATA_FILE})`);
+  console.log(`AI: Ollama ${process.env.OLLAMA_MODEL || 'llama3'} at ${process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434'}`);
 });
 
 module.exports = app;

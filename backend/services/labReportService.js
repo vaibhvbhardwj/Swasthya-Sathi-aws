@@ -1,7 +1,4 @@
-const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
-const { awsConfig, bedrockConfig } = require('../config/aws');
-
-const bedrockClient = new BedrockRuntimeClient(awsConfig);
+const { invokeLocalLlama } = require('./aiEngineService');
 
 /**
  * Parse lab report text into structured format
@@ -117,7 +114,7 @@ function detectAbnormals(labReport) {
 }
 
 /**
- * Generate AI explanation using Amazon Nova Pro with guardrails
+ * Generate AI explanation using local Llama 3 with guardrails
  */
 async function generateAIExplanation(labReport, abnormals) {
   const prompt = `You are a healthcare AI assistant. Analyze this lab report and provide a patient-friendly explanation.
@@ -136,48 +133,18 @@ IMPORTANT GUARDRAILS - YOU MUST FOLLOW THESE:
 
 Provide a clear, patient-friendly explanation:`;
 
-  const payload = {
-    messages: [{
-      role: 'user',
-      content: [{ text: prompt }]
-    }],
-    inferenceConfig: {
-      max_new_tokens: bedrockConfig.maxTokens,
-      temperature: bedrockConfig.temperature
-    }
-  };
-
   try {
-    const command = new InvokeModelCommand({
-      modelId: bedrockConfig.modelIdSonnet,
-      contentType: 'application/json',
-      accept: 'application/json',
-      body: JSON.stringify(payload)
-    });
-
-    const response = await bedrockClient.send(command);
-    const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-    
-    return responseBody.output?.message?.content?.[0]?.text || 'Unable to generate explanation';
+    const response = await invokeLocalLlama(prompt);
+    return response.text || 'Unable to generate explanation';
   } catch (error) {
-    console.error('Bedrock error:', error);
-    
-    // Fallback to Nova Lite
-    try {
-      const fallbackCommand = new InvokeModelCommand({
-        modelId: bedrockConfig.modelIdHaiku,
-        contentType: 'application/json',
-        accept: 'application/json',
-        body: JSON.stringify(payload)
-      });
-      
-      const fallbackResponse = await bedrockClient.send(fallbackCommand);
-      const fallbackBody = JSON.parse(new TextDecoder().decode(fallbackResponse.body));
-      
-      return fallbackBody.output?.message?.content?.[0]?.text || 'Unable to generate explanation';
-    } catch (fallbackError) {
-      throw new Error('AI service unavailable');
+    console.warn('AI explanation fallback:', error.message);
+    let summary = 'Lab Analysis Summary:\n';
+    if (abnormals.length > 0) {
+      summary += `• Out-of-range parameters: ${abnormals.join(', ')}.\n• Please consult a healthcare professional for clinical evaluation.`;
+    } else {
+      summary += '• All parsed test parameters are within standard reference ranges.';
     }
+    return summary;
   }
 }
 

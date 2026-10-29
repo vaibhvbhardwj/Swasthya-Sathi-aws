@@ -12,6 +12,10 @@
  */
 
 const fc = require('fast-check');
+const validIsoDate = () => fc.date({
+  min: new Date('2020-01-01T00:00:00.000Z'),
+  max: new Date('2035-12-31T23:59:59.999Z')
+}).map(d => d.toISOString());
 
 // Mock DOM and localStorage
 global.document = {
@@ -110,7 +114,7 @@ describe('Preservation Property Tests: All Other Chat Functionality Unchanged', 
             question: fc.string({ minLength: 5, maxLength: 100 }),
             status: fc.constant('approved'),
             aiResponse: fc.string({ minLength: 10, maxLength: 200 }),
-            createdAt: fc.date().map(d => d.toISOString())
+            createdAt: validIsoDate()
           }),
           { minLength: 1, maxLength: 10 }
         ),
@@ -193,7 +197,7 @@ describe('Preservation Property Tests: All Other Chat Functionality Unchanged', 
             status: fc.constant('approved'),
             aiResponse: fc.string({ minLength: 10, maxLength: 200 }),
             editedResponse: fc.option(fc.string({ minLength: 10, maxLength: 200 }), { nil: null }),
-            createdAt: fc.date().map(d => d.toISOString())
+            createdAt: validIsoDate()
           }),
           { minLength: 1, maxLength: 5 }
         ),
@@ -269,7 +273,7 @@ describe('Preservation Property Tests: All Other Chat Functionality Unchanged', 
             status: fc.constant('approved'),
             aiResponse: fc.string({ minLength: 10, maxLength: 200 }),
             clinicianNotes: fc.option(fc.string({ minLength: 10, maxLength: 200 }), { nil: null }),
-            createdAt: fc.date().map(d => d.toISOString())
+            createdAt: validIsoDate()
           }),
           { minLength: 1, maxLength: 5 }
         ),
@@ -465,7 +469,7 @@ describe('Preservation Property Tests: All Other Chat Functionality Unchanged', 
               'Multi\nline\nresponse',
               '**Important:** This is a note'
             ),
-            createdAt: fc.date().map(d => d.toISOString())
+            createdAt: validIsoDate()
           }),
           { minLength: 1, maxLength: 3 }
         ),

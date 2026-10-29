@@ -1,20 +1,13 @@
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand, QueryCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
 const { v4: uuidv4 } = require('uuid');
-const { awsConfig, dynamoDBConfig } = require('../config/aws');
+const localStore = require('./localStore');
 const { createNotification } = require('./notificationService');
-
-const client = new DynamoDBClient(awsConfig);
-const docClient = DynamoDBDocumentClient.from(client);
-
-const MEDICATIONS_TABLE = dynamoDBConfig.tables.medications;
 
 /**
  * Calculate next reminder time based on frequency
  */
 function calculateNextReminder(frequency, customInterval) {
   const now = new Date();
-  
+
   switch (frequency) {
     case 'once_daily':
       now.setHours(now.getHours() + 24);
@@ -29,14 +22,35 @@ function calculateNextReminder(frequency, customInterval) {
       if (customInterval) {
         now.setHours(now.getHours() + parseInt(customInterval));
       } else {
-        now.setHours(now.getHours() + 24); // Default to 24 hours
+        now.setHours(now.getHours() + 24);
       }
       break;
     default:
       now.setHours(now.getHours() + 24);
   }
-  
+
   return now.toISOString();
+}
+
+function formatMedication(medication) {
+  const now = new Date();
+  const nextReminder = medication.nextReminderAt ? new Date(medication.nextReminderAt) : null;
+  const takenHistory = medication.takenHistory || [];
+  const skippedHistory = medication.skippedHistory || [];
+  const lastTakenAt = medication.lastTakenAt || null;
+  const todayKey = now.toISOString().slice(0, 10);
+
+  return {
+    ...medication,
+    takenHistory,
+    skippedHistory,
+    takenCount: medication.takenCount || takenHistory.length,
+    skippedCount: medication.skippedCount || skippedHistory.length,
+    lastTakenAt,
+    isDue: nextReminder ? nextReminder <= now : false,
+    takenToday: takenHistory.some(entry => String(entry.takenAt || '').startsWith(todayKey)),
+    nextReminderInMinutes: nextReminder ? Math.ceil((nextReminder - now) / 60000) : null
+  };
 }
 
 /**
@@ -63,16 +77,16 @@ async function addMedication({ userId, name, dosage, frequency, customInterval, 
     frequency,
     customInterval: customInterval || null,
     notes: notes || '',
+    takenCount: 0,
+    skippedCount: 0,
+    takenHistory: [],
+    skippedHistory: [],
+    lastTakenAt: null,
     nextReminderAt,
     createdAt: new Date().toISOString()
   };
 
-  const command = new PutCommand({
-    TableName: MEDICATIONS_TABLE,
-    Item: medication
-  });
-
-  await docClient.send(command);
+  await localStore.insert('medications', medication);
 
   return { medicationId, message: 'Medication added successfully' };
 }
@@ -81,75 +95,99 @@ async function addMedication({ userId, name, dosage, frequency, customInterval, 
  * Get all medications for user
  */
 async function getMedications(userId) {
-  const command = new QueryCommand({
-    TableName: MEDICATIONS_TABLE,
-    IndexName: 'userId-index',
-    KeyConditionExpression: 'userId = :userId',
-    ExpressionAttributeValues: {
-      ':userId': userId
-    }
-  });
+  const medications = await localStore.list(
+    'medications',
+    medication => medication.userId === userId,
+    { sortBy: 'nextReminderAt', desc: false }
+  );
 
-  const response = await docClient.send(command);
-  return response.Items || [];
+  return medications.map(formatMedication);
 }
 
 /**
  * Delete medication
  */
 async function deleteMedication(medicationId) {
-  const command = new DeleteCommand({
-    TableName: MEDICATIONS_TABLE,
-    Key: { medicationId }
-  });
-
-  await docClient.send(command);
+  await localStore.removeById('medications', 'medicationId', medicationId);
 
   return { message: 'Medication deleted successfully' };
 }
 
-/**
- * Check for due medications and send reminders
- * This should be called by a background scheduler
- */
-async function checkAndSendReminders() {
-  const { ScanCommand } = require('@aws-sdk/lib-dynamodb');
-  
-  const now = new Date().toISOString();
+async function markMedicationTaken(medicationId, userId) {
+  const medication = await localStore.findById('medications', 'medicationId', medicationId);
 
-  const command = new ScanCommand({
-    TableName: MEDICATIONS_TABLE,
-    FilterExpression: 'nextReminderAt <= :now',
-    ExpressionAttributeValues: {
-      ':now': now
-    }
+  if (!medication || medication.userId !== userId) {
+    throw new Error('Medication not found');
+  }
+
+  const takenAt = new Date().toISOString();
+  const nextReminderAt = calculateNextReminder(medication.frequency, medication.customInterval);
+  const takenHistory = [
+    ...(medication.takenHistory || []),
+    { takenAt, scheduledFor: medication.nextReminderAt || null }
+  ].slice(-30);
+
+  const updated = await localStore.updateById('medications', 'medicationId', medicationId, {
+    lastTakenAt: takenAt,
+    nextReminderAt,
+    takenHistory,
+    takenCount: (medication.takenCount || 0) + 1
   });
 
-  const response = await docClient.send(command);
-  const dueMedications = response.Items || [];
+  await createNotification({
+    userId,
+    type: 'system_update',
+    message: `${medication.name} marked as taken. Next reminder updated.`
+  });
+
+  return {
+    message: 'Medication marked as taken',
+    medication: formatMedication(updated)
+  };
+}
+
+async function skipMedication(medicationId, userId) {
+  const medication = await localStore.findById('medications', 'medicationId', medicationId);
+
+  if (!medication || medication.userId !== userId) {
+    throw new Error('Medication not found');
+  }
+
+  const skippedAt = new Date().toISOString();
+  const nextReminderAt = calculateNextReminder(medication.frequency, medication.customInterval);
+  const skippedHistory = [
+    ...(medication.skippedHistory || []),
+    { skippedAt, scheduledFor: medication.nextReminderAt || null }
+  ].slice(-30);
+
+  const updated = await localStore.updateById('medications', 'medicationId', medicationId, {
+    nextReminderAt,
+    skippedHistory,
+    skippedCount: (medication.skippedCount || 0) + 1
+  });
+
+  return {
+    message: 'Medication skipped',
+    medication: formatMedication(updated)
+  };
+}
+
+/**
+ * Check for due medications and send reminders.
+ */
+async function checkAndSendReminders() {
+  const now = new Date().toISOString();
+  const dueMedications = await localStore.list('medications', medication => medication.nextReminderAt <= now);
 
   for (const med of dueMedications) {
-    // Send notification
     await createNotification({
       userId: med.userId,
       type: 'medication_reminder',
       message: `Time to take your medication: ${med.name} (${med.dosage})`
     });
 
-    // Update next reminder time
-    const { UpdateCommand } = require('@aws-sdk/lib-dynamodb');
     const nextReminder = calculateNextReminder(med.frequency, med.customInterval);
-    
-    const updateCommand = new UpdateCommand({
-      TableName: MEDICATIONS_TABLE,
-      Key: { medicationId: med.medicationId },
-      UpdateExpression: 'SET nextReminderAt = :nextReminder',
-      ExpressionAttributeValues: {
-        ':nextReminder': nextReminder
-      }
-    });
-
-    await docClient.send(updateCommand);
+    await localStore.updateById('medications', 'medicationId', med.medicationId, { nextReminderAt: nextReminder });
   }
 
   return { processedCount: dueMedications.length };
@@ -159,5 +197,7 @@ module.exports = {
   addMedication,
   getMedications,
   deleteMedication,
+  markMedicationTaken,
+  skipMedication,
   checkAndSendReminders
 };

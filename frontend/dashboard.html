@@ -224,6 +224,13 @@
                                 <i class="fas fa-paper-plane"></i>
                             </button>
                         </div>
+                        <div class="chat-history-section">
+                            <div class="chat-history-header">
+                                <h3>Chat History</h3>
+                                <span>Previous AI answers and doctor review status</span>
+                            </div>
+                            <div id="chat-history-list" class="chat-history-list"></div>
+                        </div>
                     </div>
 
                     <!-- Medications Module -->
@@ -253,7 +260,12 @@
                                     <option value="once_daily">Once Daily</option>
                                     <option value="twice_daily">Twice Daily</option>
                                     <option value="thrice_daily">Three Times Daily</option>
+                                    <option value="custom">Custom Interval</option>
                                 </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Custom Interval (hours)</label>
+                                <input type="number" id="med-custom-interval" min="1" max="72" placeholder="Only needed for custom frequency">
                             </div>
                             <div class="form-group">
                                 <label>Notes (Optional)</label>

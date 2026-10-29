@@ -144,6 +144,20 @@ function handleLogout() {
     window.location.href = 'index.html';
 }
 
+function handleSessionExpired() {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userId');
+    window.location.href = 'auth.html?expired=true';
+}
+
+function checkResponseAuth(response) {
+    if (response && response.status === 401) {
+        handleSessionExpired();
+        return false;
+    }
+    return true;
+}
+
 // File Upload Functions
 function switchInputMethod(method) {
     // Update toggle buttons
@@ -348,9 +362,14 @@ async function loadUserName() {
         const response = await fetch(`${API_BASE_URL}/profile`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
-        
+
+        if (response.status === 401) {
+            handleSessionExpired();
+            return;
+        }
+
         const data = await response.json();
-        
+
         if (response.ok) {
             document.getElementById('user-name').textContent = data.name;
         }
@@ -462,6 +481,50 @@ function formatMarkdownText(text) {
     text = text.replace(/\n/g, '<br>');
     
     return text;
+}
+
+function escapeHTML(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function formatRelativeTime(dateString) {
+    if (!dateString) return 'Not scheduled';
+
+    const diffMs = new Date(dateString) - new Date();
+    const absMinutes = Math.abs(Math.round(diffMs / 60000));
+    const hours = Math.floor(absMinutes / 60);
+    const minutes = absMinutes % 60;
+    const friendly = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+
+    return diffMs <= 0 ? `Due ${friendly} ago` : `Due in ${friendly}`;
+}
+
+function renderChatResponse(responseText, options = {}) {
+    let responseHTML = formatMarkdownText(escapeHTML(responseText));
+
+    if (options.clinicianNotes) {
+        responseHTML += `
+            <div class="clinician-notes-display">
+                <div class="notes-badge">
+                    <i class="fas fa-user-md"></i> Clinician's Note
+                </div>
+                <div class="notes-content">
+                    ${formatMarkdownText(escapeHTML(options.clinicianNotes))}
+                </div>
+            </div>`;
+    }
+
+    if (options.reviewed) {
+        const label = options.localAi ? 'Local AI response' : 'Clinician Approved';
+        responseHTML += `<div class="review-status approved"><i class="fas fa-check"></i> ${label}</div>`;
+    }
+
+    return responseHTML;
 }
 
 async function handleLabAnalysis() {
@@ -720,7 +783,7 @@ async function handleSendChat() {
     }
     
     // Show user's question
-    messagesContainer.innerHTML += `<div class="chat-message user">${question}</div>`;
+    messagesContainer.innerHTML += `<div class="chat-message user">${escapeHTML(question)}</div>`;
     input.value = '';
     
     // Show loading
@@ -1098,9 +1161,14 @@ async function loadNotifications() {
         const response = await fetch(`${API_BASE_URL}/notifications`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
-        
+
+        if (response.status === 401) {
+            handleSessionExpired();
+            return;
+        }
+
         const data = await response.json();
-        
+
         if (response.ok) {
             const badge = document.getElementById('notif-badge');
             if (badge) {
@@ -1506,4 +1574,493 @@ function cancelEdit(draftId) {
     editBtn.style.display = 'inline-block';
     saveBtn.style.display = 'none';
     cancelBtn.style.display = 'none';
+}
+
+// Optimized local-mode chat and medication workflows.
+async function handleSendChat() {
+    const input = document.getElementById('chat-input');
+    const question = input.value.trim();
+
+    if (!question) return;
+
+    const messagesContainer = document.getElementById('chat-messages');
+    let contextualQuestion = question;
+    const labContext = sessionStorage.getItem('labAnalysisContext');
+
+    if (labContext) {
+        try {
+            const context = JSON.parse(labContext);
+            const abnormalsList = context.abnormals.length > 0 ? context.abnormals.join(', ') : 'None';
+            const testsList = context.parsedValues
+                .map(test => `${test.name}: ${test.value} ${test.unit}`)
+                .join(', ');
+
+            contextualQuestion = `[Lab Report Context]\n` +
+                `Recent lab analysis shows:\n` +
+                `- Tests analyzed: ${context.parsedValues.length}\n` +
+                `- Abnormal values: ${abnormalsList}\n` +
+                `- Test results: ${testsList}\n` +
+                `- AI Analysis: ${context.aiExplanation.substring(0, 200)}...\n\n` +
+                `User Question: ${question}`;
+
+            sessionStorage.removeItem('labAnalysisContext');
+            window.labAnalysisContext = null;
+
+            messagesContainer.innerHTML += `
+                <div class="chat-context-indicator">
+                    <i class="fas fa-flask"></i> Including your recent lab report analysis in this question
+                </div>`;
+        } catch (error) {
+            console.error('Error parsing lab context:', error);
+        }
+    }
+
+    messagesContainer.innerHTML += `<div class="chat-message user">${escapeHTML(question)}</div>`;
+    input.value = '';
+    messagesContainer.innerHTML += `<div class="chat-message ai loading"><i class="fas fa-spinner fa-spin"></i> Asking local Llama 3...</div>`;
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/chat/ask`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ question: contextualQuestion })
+        });
+
+        if (response.status === 401) {
+            handleSessionExpired();
+            return;
+        }
+
+        const data = await response.json();
+        const loadingMsg = messagesContainer.querySelector('.loading');
+        if (loadingMsg) loadingMsg.remove();
+
+        if (!response.ok) {
+            messagesContainer.innerHTML += `<div class="chat-message ai error">Error: ${escapeHTML(data.message || data.error || 'Failed to submit question')}</div>`;
+            return;
+        }
+
+        const responseText = data.aiResponse || data.response || data.message;
+        const status = data.status || 'approved';
+        const chatHistory = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+
+        chatHistory.push({
+            draftId: data.draftId,
+            question,
+            aiResponse: responseText,
+            status,
+            model: data.model || 'llama3',
+            createdAt: new Date().toISOString(),
+            reviewedAt: data.reviewedAt || (status === 'approved' ? new Date().toISOString() : null),
+            reviewedBy: status === 'approved' ? 'LOCAL_AI' : null
+        });
+        localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+
+        if (status === 'approved') {
+            messagesContainer.innerHTML += `
+                <div class="chat-message ai" data-draft-id="${data.draftId}">
+                    ${renderChatResponse(responseText, { reviewed: true, localAi: true })}
+                </div>`;
+        } else {
+            messagesContainer.innerHTML += `
+                <div class="chat-message ai" data-draft-id="${data.draftId}">
+                    <div class="pending-review">
+                        <i class="fas fa-clock"></i> ${escapeHTML(data.message)}
+                        <div class="review-status"><i class="fas fa-hourglass-half"></i> Waiting for clinician approval</div>
+                    </div>
+                </div>`;
+            pollForApproval(data.draftId);
+        }
+
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        loadAnalytics();
+    } catch (error) {
+        const loadingMsg = messagesContainer.querySelector('.loading');
+        if (loadingMsg) loadingMsg.remove();
+        messagesContainer.innerHTML += `<div class="chat-message ai error">Error: ${escapeHTML(error.message)}</div>`;
+    }
+}
+
+async function loadChatHistory() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/chat/history`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (response.status === 401) {
+            handleSessionExpired();
+            return;
+        }
+
+        const data = await response.json();
+        const messagesContainer = document.getElementById('chat-messages');
+
+        if (!response.ok || !data.chats || data.chats.length === 0) {
+            messagesContainer.innerHTML = '<div class="empty-state compact"><i class="fas fa-comments"></i><p>No health questions yet.</p><span>Ask a question below to start a local Llama 3 chat.</span></div>';
+            return;
+        }
+
+        messagesContainer.innerHTML = '';
+
+        data.chats.reverse().forEach(chat => {
+            messagesContainer.innerHTML += `<div class="chat-message user">${escapeHTML(chat.question)}</div>`;
+
+            if (chat.status === 'approved') {
+                const responseText = chat.editedResponse || chat.aiResponse;
+                messagesContainer.innerHTML += `
+                    <div class="chat-message ai">
+                        ${renderChatResponse(responseText, {
+                            clinicianNotes: chat.clinicianNotes,
+                            reviewed: true,
+                            localAi: chat.reviewedBy === 'LOCAL_AI'
+                        })}
+                    </div>`;
+            } else if (chat.status === 'pending_review') {
+                messagesContainer.innerHTML += `
+                    <div class="chat-message ai" data-draft-id="${chat.draftId}">
+                        <div class="pending-review">
+                            <i class="fas fa-clock"></i> Response pending clinician review
+                            <div class="review-status"><i class="fas fa-hourglass-half"></i> Waiting for clinician approval</div>
+                        </div>
+                    </div>`;
+                pollForApproval(chat.draftId);
+            }
+        });
+
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    } catch (error) {
+        console.error('Error loading chat history:', error);
+    }
+}
+
+function displayMedications(medications) {
+    const container = document.getElementById('medications-list');
+
+    if (medications.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-pills"></i><p>No medications added yet.</p><span>Add your first medication to start tracking doses.</span></div>';
+        return;
+    }
+
+    const dueCount = medications.filter(med => med.isDue).length;
+    const takenToday = medications.filter(med => med.takenToday).length;
+    const totalTaken = medications.reduce((sum, med) => sum + (med.takenCount || 0), 0);
+
+    container.innerHTML = `
+        <div class="med-tracker-summary">
+            <div><strong>${dueCount}</strong><span>Due now</span></div>
+            <div><strong>${takenToday}</strong><span>Taken today</span></div>
+            <div><strong>${totalTaken}</strong><span>Total logged</span></div>
+        </div>
+        <div class="medication-grid">
+            ${medications.map(med => {
+                const statusClass = med.isDue ? 'due' : 'scheduled';
+                const statusText = med.isDue ? 'Due now' : formatRelativeTime(med.nextReminderAt);
+                const lastTaken = med.lastTakenAt ? new Date(med.lastTakenAt).toLocaleString() : 'Not taken yet';
+                const frequency = med.frequency.replace(/_/g, ' ');
+
+                return `
+                    <div class="medication-card medication-card-modern ${statusClass}">
+                        <div class="med-card-topline">
+                            <span class="med-status ${statusClass}">${statusText}</span>
+                            <button class="icon-danger-btn" title="Delete medication" onclick="deleteMedication('${med.medicationId}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        <h4>${escapeHTML(med.name)}</h4>
+                        <div class="med-detail-row">
+                            <span><i class="fas fa-capsules"></i> ${escapeHTML(med.dosage)}</span>
+                            <span><i class="fas fa-repeat"></i> ${escapeHTML(frequency)}</span>
+                        </div>
+                        ${med.notes ? `<p class="med-notes">${escapeHTML(med.notes)}</p>` : ''}
+                        <div class="med-meta">
+                            <span>Last taken: ${escapeHTML(lastTaken)}</span>
+                            <span>Taken ${med.takenCount || 0} time${(med.takenCount || 0) === 1 ? '' : 's'}</span>
+                            <span>Skipped ${med.skippedCount || 0} time${(med.skippedCount || 0) === 1 ? '' : 's'}</span>
+                        </div>
+                        <div class="med-actions">
+                            <button class="btn-taken" onclick="markMedicationTaken('${med.medicationId}')">
+                                <i class="fas fa-check"></i> Taken
+                            </button>
+                            <button class="btn-skip" onclick="skipMedication('${med.medicationId}')">
+                                <i class="fas fa-forward"></i> Skip
+                            </button>
+                        </div>
+                    </div>`;
+            }).join('')}
+        </div>`;
+}
+
+async function handleSaveMedication() {
+    const formData = {
+        name: document.getElementById('med-name').value.trim(),
+        dosage: document.getElementById('med-dosage').value.trim(),
+        frequency: document.getElementById('med-frequency').value,
+        customInterval: document.getElementById('med-custom-interval').value,
+        notes: document.getElementById('med-notes').value.trim()
+    };
+
+    if (!formData.name || !formData.dosage || !formData.frequency) {
+        alert('Please fill in all required fields');
+        return;
+    }
+
+    if (formData.frequency === 'custom' && !formData.customInterval) {
+        alert('Please enter a custom interval in hours');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/medications`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify(formData)
+        });
+
+        if (response.ok) {
+            document.getElementById('add-medication-form').style.display = 'none';
+            document.getElementById('med-name').value = '';
+            document.getElementById('med-dosage').value = '';
+            document.getElementById('med-frequency').value = '';
+            document.getElementById('med-custom-interval').value = '';
+            document.getElementById('med-notes').value = '';
+            loadMedications();
+            loadAnalytics();
+        } else {
+            const data = await response.json();
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function markMedicationTaken(medicationId) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/medications/${medicationId}/taken`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            loadMedications();
+            loadNotifications();
+            loadAnalytics();
+        } else {
+            alert('Error: ' + (data.error || 'Unable to mark medication as taken'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function skipMedication(medicationId) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/medications/${medicationId}/skip`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            loadMedications();
+            loadAnalytics();
+        } else {
+            alert('Error: ' + (data.error || 'Unable to skip medication'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+function renderDoctorReviewStatus(chat) {
+    if (chat.status === 'approved' && chat.reviewedBy !== 'LOCAL_AI') {
+        return `
+            <div class="doctor-review-hint approved">
+                <i class="fas fa-user-md"></i>
+                <span>Doctor reviewed this response${chat.reviewedAt ? ` on ${escapeHTML(new Date(chat.reviewedAt).toLocaleString())}` : ''}.</span>
+            </div>`;
+    }
+
+    if (chat.status === 'rejected') {
+        return `
+            <div class="doctor-review-hint rejected">
+                <i class="fas fa-triangle-exclamation"></i>
+                <span>A doctor rejected this draft. Please wait for an updated response.</span>
+            </div>`;
+    }
+
+    return `
+        <div class="doctor-review-hint waiting">
+            <i class="fas fa-user-clock"></i>
+            <span>This is an instant local AI answer. Waiting for a doctor's reviewed reply.</span>
+        </div>`;
+}
+
+function renderPatientChatPair(chat, compact = false) {
+    const responseText = chat.editedResponse || chat.aiResponse || chat.response || 'Response is being prepared.';
+    const notes = chat.clinicianNotes || null;
+    const statusClass = chat.status === 'approved' && chat.reviewedBy !== 'LOCAL_AI' ? 'doctor-approved' : chat.status || 'pending_review';
+
+    return `
+        <div class="${compact ? 'history-chat-item' : 'current-chat-item'} ${statusClass}">
+            <div class="chat-message user">${escapeHTML(chat.question || '')}</div>
+            <div class="chat-message ai" data-draft-id="${escapeHTML(chat.draftId || '')}">
+                ${renderChatResponse(responseText, {
+                    clinicianNotes: notes,
+                    reviewed: chat.status === 'approved' && chat.reviewedBy !== 'LOCAL_AI',
+                    localAi: false
+                })}
+                ${renderDoctorReviewStatus(chat)}
+            </div>
+        </div>`;
+}
+
+function renderChatHistoryList(chats) {
+    const historyContainer = document.getElementById('chat-history-list');
+    if (!historyContainer) return;
+
+    if (!chats || chats.length === 0) {
+        historyContainer.innerHTML = '<div class="empty-state compact"><i class="fas fa-clock-rotate-left"></i><p>No chat history yet.</p><span>Your previous questions will appear here.</span></div>';
+        return;
+    }
+
+    historyContainer.innerHTML = chats
+        .slice()
+        .reverse()
+        .map(chat => renderPatientChatPair(chat, true))
+        .join('');
+}
+
+// Patient chat workflow: show local AI immediately, keep doctor review visible.
+async function handleSendChat() {
+    const input = document.getElementById('chat-input');
+    const question = input.value.trim();
+
+    if (!question) return;
+
+    const messagesContainer = document.getElementById('chat-messages');
+    let contextualQuestion = question;
+    const labContext = sessionStorage.getItem('labAnalysisContext');
+
+    if (labContext) {
+        try {
+            const context = JSON.parse(labContext);
+            const abnormalsList = context.abnormals.length > 0 ? context.abnormals.join(', ') : 'None';
+            const testsList = context.parsedValues
+                .map(test => `${test.name}: ${test.value} ${test.unit}`)
+                .join(', ');
+
+            contextualQuestion = `[Lab Report Context]\n` +
+                `Recent lab analysis shows:\n` +
+                `- Tests analyzed: ${context.parsedValues.length}\n` +
+                `- Abnormal values: ${abnormalsList}\n` +
+                `- Test results: ${testsList}\n` +
+                `- AI Analysis: ${context.aiExplanation.substring(0, 200)}...\n\n` +
+                `User Question: ${question}`;
+
+            sessionStorage.removeItem('labAnalysisContext');
+            window.labAnalysisContext = null;
+        } catch (error) {
+            console.error('Error parsing lab context:', error);
+        }
+    }
+
+    input.value = '';
+    messagesContainer.innerHTML = `
+        <div class="chat-message user">${escapeHTML(question)}</div>
+        <div class="chat-message ai loading"><i class="fas fa-spinner fa-spin"></i> Asking local Llama 3...</div>`;
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/chat/ask`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ question: contextualQuestion })
+        });
+
+        if (response.status === 401) {
+            handleSessionExpired();
+            return;
+        }
+
+        const data = await response.json();
+        const loadingMsg = messagesContainer.querySelector('.loading');
+        if (loadingMsg) loadingMsg.remove();
+
+        if (!response.ok) {
+            messagesContainer.innerHTML += `<div class="chat-message ai error">Error: ${escapeHTML(data.message || data.error || 'Failed to submit question')}</div>`;
+            return;
+        }
+
+        const chat = {
+            draftId: data.draftId,
+            question,
+            aiResponse: data.aiResponse || data.response || data.message,
+            status: data.status || 'pending_review',
+            model: data.model || 'llama3',
+            createdAt: new Date().toISOString(),
+            reviewedAt: data.reviewedAt || null,
+            reviewedBy: data.reviewedBy || null
+        };
+
+        messagesContainer.innerHTML = renderPatientChatPair(chat);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+        if (chat.status === 'pending_review') {
+            pollForApproval(chat.draftId);
+        }
+
+        await loadChatHistory();
+        loadAnalytics();
+    } catch (error) {
+        const loadingMsg = messagesContainer.querySelector('.loading');
+        if (loadingMsg) loadingMsg.remove();
+        messagesContainer.innerHTML += `<div class="chat-message ai error">Error: ${escapeHTML(error.message)}</div>`;
+    }
+}
+
+async function loadChatHistory() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/chat/history`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        if (response.status === 401) {
+            handleSessionExpired();
+            return;
+        }
+
+        const data = await response.json();
+        const messagesContainer = document.getElementById('chat-messages');
+        const chats = response.ok && data.chats ? data.chats : [];
+        const chronologicalChats = chats.slice().reverse();
+
+        renderChatHistoryList(chats);
+
+        if (chronologicalChats.length === 0) {
+            messagesContainer.innerHTML = '<div class="empty-state compact"><i class="fas fa-comments"></i><p>No active question yet.</p><span>Ask a question below to get an instant local AI answer.</span></div>';
+            return;
+        }
+
+        const latestChat = chronologicalChats[chronologicalChats.length - 1];
+        messagesContainer.innerHTML = renderPatientChatPair(latestChat);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+        chronologicalChats
+            .filter(chat => chat.status === 'pending_review')
+            .forEach(chat => pollForApproval(chat.draftId));
+    } catch (error) {
+        console.error('Error loading chat history:', error);
+    }
 }

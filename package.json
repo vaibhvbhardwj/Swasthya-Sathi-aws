@@ -1,11 +1,10 @@
 {
   "scripts": {
-    "test": "jest",
+    "start": "npm --prefix backend start",
+    "dev": "npm --prefix backend run dev",
+    "test": "jest frontend --runInBand --forceExit",
+    "test:backend": "node backend/tests/auth.test.js && node backend/tests/ocrService.test.js && node backend/tests/uploadMiddleware.test.js && node backend/tests/labReportUploadRoute.test.js",
     "test:bugfix": "jest frontend/dashboard.bugfix.test.js"
-  },
-  "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.1002.0",
-    "@aws-sdk/client-dynamodb": "^3.1002.0"
   },
   "devDependencies": {
     "fast-check": "^4.5.3",

@@ -2341,3 +2341,306 @@ body {
     color: #667eea;
     font-size: 16px;
 }
+
+/* Workflow polish: chat and medication tracker */
+.chat-container {
+    height: min(58vh, 560px);
+    min-height: 420px;
+    background: #f7f9fc;
+}
+
+.chat-message {
+    line-height: 1.6;
+}
+
+.chat-message.ai.error {
+    border-color: #fecaca;
+    background: #fff5f5;
+    color: #991b1b;
+}
+
+.current-chat-item,
+.history-chat-item {
+    display: grid;
+    gap: 12px;
+}
+
+.doctor-review-hint {
+    align-items: flex-start;
+    border-radius: 12px;
+    display: flex;
+    font-size: 13px;
+    font-weight: 600;
+    gap: 10px;
+    line-height: 1.45;
+    margin-top: 14px;
+    padding: 12px 14px;
+}
+
+.doctor-review-hint.waiting {
+    background: #fff7ed;
+    color: #9a3412;
+}
+
+.doctor-review-hint.approved {
+    background: #ecfdf3;
+    color: #166534;
+}
+
+.doctor-review-hint.rejected {
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.chat-history-section {
+    margin-top: 26px;
+}
+
+.chat-history-header {
+    align-items: flex-end;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.chat-history-header h3 {
+    color: #2d3748;
+    font-size: 18px;
+    margin: 0;
+}
+
+.chat-history-header span {
+    color: #667085;
+    font-size: 13px;
+}
+
+.chat-history-list {
+    display: grid;
+    gap: 14px;
+}
+
+.history-chat-item {
+    background: #ffffff;
+    border: 1px solid #e4e8f0;
+    border-radius: 14px;
+    padding: 14px;
+}
+
+.history-chat-item .chat-message {
+    margin-bottom: 0;
+    max-width: 100%;
+}
+
+.history-chat-item .chat-message.user {
+    justify-self: end;
+    max-width: min(78%, 760px);
+}
+
+.history-chat-item .chat-message.ai {
+    max-width: min(86%, 860px);
+}
+
+.review-status {
+    margin-top: 12px;
+}
+
+.empty-state {
+    background: white;
+    border: 2px dashed #d8deea;
+    border-radius: 14px;
+    color: #667085;
+    padding: 34px;
+    text-align: center;
+}
+
+.empty-state.compact {
+    padding: 24px;
+    margin: 30px auto;
+    max-width: 420px;
+}
+
+.empty-state i {
+    color: #667eea;
+    font-size: 34px;
+    margin-bottom: 12px;
+}
+
+.empty-state p {
+    color: #2d3748;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.med-tracker-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.med-tracker-summary div {
+    background: white;
+    border: 1px solid #e4e8f0;
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+}
+
+.med-tracker-summary strong {
+    color: #2d3748;
+    display: block;
+    font-size: 28px;
+    line-height: 1;
+    margin-bottom: 6px;
+}
+
+.med-tracker-summary span {
+    color: #667085;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.medication-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 16px;
+}
+
+.medication-card-modern {
+    border-left-width: 0;
+    border: 1px solid #e4e8f0;
+    margin-bottom: 0;
+    padding: 18px;
+}
+
+.medication-card-modern.due {
+    border-color: #f59e0b;
+    box-shadow: 0 8px 24px rgba(245, 158, 11, 0.14);
+}
+
+.medication-card-modern:hover {
+    transform: translateY(-2px);
+}
+
+.med-card-topline,
+.med-detail-row,
+.med-actions {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+}
+
+.med-status {
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 10px;
+}
+
+.med-status.due {
+    background: #fff7ed;
+    color: #c2410c;
+}
+
+.med-status.scheduled {
+    background: #eef2ff;
+    color: #4f46e5;
+}
+
+.icon-danger-btn {
+    align-items: center;
+    background: #fee2e2 !important;
+    border: 0;
+    border-radius: 9px;
+    color: #b91c1c !important;
+    display: inline-flex;
+    height: 34px;
+    justify-content: center;
+    margin-top: 0 !important;
+    padding: 0 !important;
+    width: 34px;
+}
+
+.icon-danger-btn:hover {
+    background: #fecaca !important;
+}
+
+.med-detail-row {
+    color: #4a5568;
+    justify-content: flex-start;
+    margin: 10px 0;
+}
+
+.med-detail-row span {
+    background: #f8fafc;
+    border-radius: 9px;
+    padding: 7px 9px;
+}
+
+.med-notes {
+    background: #f8fafc;
+    border-radius: 10px;
+    color: #475467 !important;
+    padding: 10px;
+}
+
+.med-meta {
+    border-top: 1px solid #edf0f5;
+    display: grid;
+    gap: 5px;
+    margin-top: 12px;
+    padding-top: 12px;
+}
+
+.med-meta span {
+    color: #667085;
+    font-size: 12px;
+}
+
+.med-actions {
+    margin-top: 14px;
+}
+
+.med-actions button {
+    align-items: center;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    display: inline-flex;
+    flex: 1;
+    font-weight: 700;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 0;
+    padding: 11px 12px;
+}
+
+.btn-taken {
+    background: #16a34a !important;
+    color: white;
+}
+
+.btn-taken:hover {
+    background: #15803d !important;
+}
+
+.btn-skip {
+    background: #eef2ff !important;
+    color: #4338ca !important;
+}
+
+.btn-skip:hover {
+    background: #e0e7ff !important;
+}
+
+@media (max-width: 768px) {
+    .med-tracker-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .medication-grid {
+        grid-template-columns: 1fr;
+    }
+}

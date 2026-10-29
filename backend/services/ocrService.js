@@ -17,6 +17,16 @@ async function extractTextFromImage(imageBuffer, format) {
       throw new Error('Invalid image buffer provided');
     }
 
+    const normalizedFormat = String(format || '').toLowerCase();
+    const supportedFormats = ['jpeg', 'jpg', 'png', 'gif', 'webp', 'heic'];
+    if (!supportedFormats.includes(normalizedFormat)) {
+      throw new Error(`Unsupported image format: ${format}`);
+    }
+
+    if (imageBuffer.length < 16) {
+      throw new Error('Invalid image buffer provided');
+    }
+
     console.log(`Processing ${format} image with Tesseract.js, size: ${imageBuffer.length} bytes`);
 
     // Use Tesseract.js to extract text

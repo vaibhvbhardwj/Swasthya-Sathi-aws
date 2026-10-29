@@ -4,6 +4,8 @@ A cloud-native healthcare support platform that combines AI-powered medical info
 
 > **Development Note**: This project was developed with assistance from [Kiro AI](https://kiro.ai). The core idea, architecture decisions, and problem-solving were done by the project creator, while Kiro assisted with implementation and debugging.
 
+> **Current local setup**: The active runtime no longer requires AWS. It uses local JSON storage and Ollama/Llama 3. See [LOCAL-RENDER-SETUP.md](./LOCAL-RENDER-SETUP.md) for the up-to-date local and Render path.
+
 ## 🎯 Features
 
 - **🔬 Lab Report Analyzer**: AI-powered explanation of medical lab reports

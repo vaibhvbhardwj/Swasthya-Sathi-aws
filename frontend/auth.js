@@ -4,15 +4,35 @@ const API_BASE_URL = window.location.hostname === 'localhost'
     : '/api';
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    // Check if already logged in
-    if (localStorage.getItem('authToken')) {
-        window.location.href = 'dashboard.html';
-        return;
+document.addEventListener('DOMContentLoaded', async () => {
+    // Check URL params for expired session or tab
+    const urlParams = new URLSearchParams(window.location.search);
+    const expired = urlParams.get('expired');
+    const existingToken = localStorage.getItem('authToken');
+
+    if (expired) {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userId');
+        showMessage('Your session has expired. Please log in again.', 'error');
+    } else if (existingToken) {
+        // Verify token is still valid before auto-redirecting
+        try {
+            const res = await fetch(`${API_BASE_URL}/profile`, {
+                headers: { 'Authorization': `Bearer ${existingToken}` }
+            });
+            if (res.ok) {
+                window.location.href = 'dashboard.html';
+                return;
+            } else {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('userId');
+                showMessage('Your session has expired. Please log in again.', 'error');
+            }
+        } catch (e) {
+            // Server offline or network error, do not auto-redirect
+        }
     }
 
-    // Check URL params for tab
-    const urlParams = new URLSearchParams(window.location.search);
     const tab = urlParams.get('tab');
     if (tab === 'register') {
         switchAuthTab('register');

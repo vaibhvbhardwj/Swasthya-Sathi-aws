@@ -1,18 +1,14 @@
 const express = require('express');
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand, QueryCommand } = require('@aws-sdk/lib-dynamodb');
 const { parseLabReport, detectAbnormals, generateAIExplanation } = require('../services/labReportService');
 const { validateJWT } = require('../middleware/authMiddleware');
 const { upload, handleMulterError } = require('../middleware/uploadMiddleware');
 const { extractTextFromImage, extractTextFromPDF } = require('../services/ocrService');
-const { awsConfig } = require('../config/aws');
+const localStore = require('../services/localStore');
 const { v4: uuidv4 } = require('uuid');
 
 const router = express.Router();
-const dynamoClient = new DynamoDBClient(awsConfig);
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
-const SAFETY_DISCLAIMER = "⚠️ IMPORTANT: This analysis is for informational purposes only and does not constitute medical advice, diagnosis, or treatment. Always consult with a qualified healthcare professional for medical concerns.";
+const SAFETY_DISCLAIMER = "IMPORTANT: This analysis is for informational purposes only and does not constitute medical advice, diagnosis, or treatment. Always consult with a qualified healthcare professional for medical concerns.";
 
 /**
  * POST /api/lab-report/analyze
@@ -69,19 +65,16 @@ router.post('/analyze', async (req, res) => {
       const timestamp = new Date().toISOString();
       
       try {
-        await docClient.send(new PutCommand({
-          TableName: 'LabReports',
-          Item: {
-            reportId,
-            userId,
-            reportText,
-            parsedValues: labReport.tests,
-            abnormals,
-            aiExplanation,
-            analyzedAt: timestamp,
-            createdAt: timestamp
-          }
-        }));
+        await localStore.insert('labReports', {
+          reportId,
+          userId,
+          reportText,
+          parsedValues: labReport.tests,
+          abnormals,
+          aiExplanation,
+          analyzedAt: timestamp,
+          createdAt: timestamp
+        });
       } catch (dbError) {
         console.error('Failed to save lab report history:', dbError);
         // Continue even if history save fails
@@ -199,19 +192,16 @@ router.post('/upload', upload.single('file'), handleMulterError, async (req, res
       const timestamp = new Date().toISOString();
       
       try {
-        await docClient.send(new PutCommand({
-          TableName: 'LabReports',
-          Item: {
-            reportId,
-            userId,
-            reportText: extractedText,
-            parsedValues: labReport.tests,
-            abnormals,
-            aiExplanation,
-            analyzedAt: timestamp,
-            createdAt: timestamp
-          }
-        }));
+        await localStore.insert('labReports', {
+          reportId,
+          userId,
+          reportText: extractedText,
+          parsedValues: labReport.tests,
+          abnormals,
+          aiExplanation,
+          analyzedAt: timestamp,
+          createdAt: timestamp
+        });
       } catch (dbError) {
         console.error('Failed to save lab report history:', dbError);
         // Continue even if history save fails
@@ -245,20 +235,15 @@ router.get('/history', validateJWT, async (req, res) => {
     const userId = req.userId;
     const limit = parseInt(req.query.limit) || 10;
 
-    const result = await docClient.send(new QueryCommand({
-      TableName: 'LabReports',
-      IndexName: 'UserIdIndex',
-      KeyConditionExpression: 'userId = :userId',
-      ExpressionAttributeValues: {
-        ':userId': userId
-      },
-      ScanIndexForward: false, // Most recent first
-      Limit: limit
-    }));
+    const reports = await localStore.list(
+      'labReports',
+      report => report.userId === userId,
+      { sortBy: 'createdAt', desc: true, limit }
+    );
 
     res.json({
-      reports: result.Items || [],
-      count: result.Items?.length || 0
+      reports,
+      count: reports.length
     });
   } catch (error) {
     console.error('Failed to fetch lab report history:', error);

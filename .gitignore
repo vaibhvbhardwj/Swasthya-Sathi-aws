@@ -84,6 +84,7 @@ private/
 # Database dumps
 *.sql
 *.dump
+backend/data/
 
 # Backup files
 *.bak

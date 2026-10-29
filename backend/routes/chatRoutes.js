@@ -1,6 +1,12 @@
 const express = require('express');
-const { validateJWT, requireRole } = require('../middleware/authMiddleware');
-const { submitQuestion, getDraftResponse, reviewDraft } = require('../services/chatService');
+const { validateJWT } = require('../middleware/authMiddleware');
+const {
+  submitQuestion,
+  getDraftResponse,
+  reviewDraft,
+  getPendingDrafts,
+  getChatHistory
+} = require('../services/chatService');
 
 const router = express.Router();
 
@@ -87,30 +93,7 @@ router.post('/review', validateJWT, async (req, res) => {
  */
 router.get('/pending', validateJWT, async (req, res) => {
   try {
-    const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-    const { DynamoDBDocumentClient, ScanCommand } = require('@aws-sdk/lib-dynamodb');
-    const { awsConfig, dynamoDBConfig } = require('../config/aws');
-    
-    const client = new DynamoDBClient(awsConfig);
-    const docClient = DynamoDBDocumentClient.from(client);
-    
-    const command = new ScanCommand({
-      TableName: dynamoDBConfig.tables.chatDrafts,
-      FilterExpression: '#status = :status',
-      ExpressionAttributeNames: {
-        '#status': 'status'
-      },
-      ExpressionAttributeValues: {
-        ':status': 'pending_review'
-      }
-    });
-
-    const response = await docClient.send(command);
-
-    res.json({
-      drafts: response.Items || [],
-      count: response.Items?.length || 0
-    });
+    res.json(await getPendingDrafts());
   } catch (error) {
     console.error('Get pending drafts error:', error);
     res.status(500).json({ error: 'Failed to retrieve pending drafts' });
@@ -123,29 +106,7 @@ router.get('/pending', validateJWT, async (req, res) => {
  */
 router.get('/history', validateJWT, async (req, res) => {
   try {
-    const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-    const { DynamoDBDocumentClient, QueryCommand } = require('@aws-sdk/lib-dynamodb');
-    const { awsConfig, dynamoDBConfig } = require('../config/aws');
-    
-    const client = new DynamoDBClient(awsConfig);
-    const docClient = DynamoDBDocumentClient.from(client);
-    
-    const command = new QueryCommand({
-      TableName: dynamoDBConfig.tables.chatDrafts,
-      IndexName: 'userId-index',
-      KeyConditionExpression: 'userId = :userId',
-      ExpressionAttributeValues: {
-        ':userId': req.userId
-      },
-      ScanIndexForward: false // Most recent first
-    });
-
-    const response = await docClient.send(command);
-
-    res.json({
-      chats: response.Items || [],
-      count: response.Items?.length || 0
-    });
+    res.json(await getChatHistory(req.userId));
   } catch (error) {
     console.error('Get chat history error:', error);
     res.status(500).json({ error: 'Failed to retrieve chat history' });

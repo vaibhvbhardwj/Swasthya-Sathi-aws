@@ -64,9 +64,9 @@ async function testLogin(email, password) {
 
 async function testInvalidLogin() {
   console.log('\n=== Testing Invalid Login ===');
-  
+  const startTime = Date.now();
+
   try {
-    const startTime = Date.now();
     await loginUser({ 
       email: 'nonexistent@example.com', 
       password: 'wrongpassword' 
